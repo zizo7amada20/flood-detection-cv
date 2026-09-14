@@ -1,0 +1,9 @@
+rasterio
+GDAL
+numpy
+torch
+torchvision
+opencv-python
+scipy
+matplotlib
+scikit-image
