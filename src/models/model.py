@@ -9,51 +9,72 @@ class FloodModel(nn.Module):
 
         # ---- فرع الـ SAR (2 channels) ----
         self.sar_backbone = models.resnet50(weights='IMAGENET1K_V2')
-        # ResNet الأصلي متصمم لـ 3 channels (RGB)، إحنا عندنا 2 بس (VV, VH)
         self.sar_backbone.conv1 = nn.Conv2d(2, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.sar_backbone.fc = nn.Identity()  # نشيل آخر طبقة تصنيف، عايزين الـ features بس
+        self.sar_backbone.fc = nn.Identity()
 
         # ---- فرع الـ Optical (12 channels) ----
         self.optical_backbone = models.resnet50(weights='IMAGENET1K_V2')
         self.optical_backbone.conv1 = nn.Conv2d(12, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.optical_backbone.fc = nn.Identity()
 
+        # نشيل آخر طبقتين (avgpool + fc) من كل backbone عشان نحتفظ بالـ feature map
+        # (مش الـ vector المسطح)، لأن الـ decoder محتاج يعرف "فين" مش بس "إيه"
+        self.sar_features = nn.Sequential(*list(self.sar_backbone.children())[:-2])
+        self.optical_features = nn.Sequential(*list(self.optical_backbone.children())[:-2])
+        # The frozen extractors still respond to train()/eval() for BatchNorm behavior.
+        for param in self.sar_features.parameters():
+            param.requires_grad = False
+        for param in self.optical_features.parameters():
+            param.requires_grad = False
+        # ناتج كل واحد منهم: (batch, 2048, 8, 8) لصورة 256x256
+
         # ---- الدمج (Fusion) ----
-        # كل فرع بيطلع 2048 رقم (ده حجم الـ features القياسي لـ ResNet-50)
-        # بعد الدمج هيبقى عندنا 2048 + 2048 = 4096
-        self.fusion = nn.Sequential(
-            nn.Linear(4096, 512),
-            nn.ReLU(),
+        # بندمج الـ feature maps على مستوى الـ channels مش بعد التسطيح
+        self.fusion_conv = nn.Sequential(
+            nn.Conv2d(2048 * 2, 512, kernel_size=1),  # يدمج 4096 channel في 512
+            nn.ReLU(inplace=True),
         )
 
-        # ---- Segmentation Head ----
-        # ده هيبقى مبسط في البداية: بياخد الـ features ويطلع خريطة لكل بيكسل
-        # (النسخة دي مبسطة جداً، مش segmentation architecture كامل زي U-Net،
-        #  الهدف دلوقتي إننا نتأكد إن الـ pipeline شغال end-to-end بس)
-        self.classifier = nn.Linear(512, num_classes * 256 * 256)
-        self.num_classes = num_classes
+        # ---- Decoder: يرجع الصورة تدريجيًا من 8x8 لـ 256x256 ----
+        self.decoder = nn.Sequential(
+            self._upsample_block(512, 256),   # 8x8   -> 16x16
+            self._upsample_block(256, 128),   # 16x16 -> 32x32
+            self._upsample_block(128, 64),    # 32x32 -> 64x64
+            self._upsample_block(64, 32),     # 64x64 -> 128x128
+            self._upsample_block(32, 16),     # 128x128 -> 256x256
+            nn.Dropout2d(p=0.3),
+        )
+
+        # الطبقة الأخيرة: تحول الـ 16 channel لـ num_classes (3)
+        self.final_conv = nn.Conv2d(16, num_classes, kernel_size=1)
+
+    def _upsample_block(self, in_channels, out_channels):
+        num_groups = max(group for group in range(1, 9) if out_channels % group == 0)
+        return nn.Sequential(
+            nn.ConvTranspose2d(in_channels, out_channels, kernel_size=4, stride=2, padding=1),
+            nn.GroupNorm(num_groups, out_channels),
+            nn.ReLU(inplace=True),
+        )
 
     def forward(self, sar, optical):
-        sar_features = self.sar_backbone(sar)          # (batch, 2048)
-        optical_features = self.optical_backbone(optical)  # (batch, 2048)
+        sar_feat = self.sar_features(sar)           # (batch, 2048, 8, 8)
+        optical_feat = self.optical_features(optical)  # (batch, 2048, 8, 8)
 
-        combined = torch.cat([sar_features, optical_features], dim=1)  # (batch, 4096)
-        fused = self.fusion(combined)  # (batch, 512)
+        combined = torch.cat([sar_feat, optical_feat], dim=1)  # (batch, 4096, 8, 8)
+        fused = self.fusion_conv(combined)  # (batch, 512, 8, 8)
 
-        out = self.classifier(fused)  # (batch, num_classes * 256 * 256)
-        out = out.view(-1, self.num_classes, 256, 256)  # (batch, 3, 256, 256)
+        decoded = self.decoder(fused)  # (batch, 16, 256, 256)
+        out = self.final_conv(decoded)  # (batch, num_classes, 256, 256)
 
         return out
 
 
-# تجربة سريعة للتأكد إن الموديل شغال
 if __name__ == "__main__":
     model = FloodModel(num_classes=3)
-
-    # نعمل بيانات وهمية بنفس شكل الداتا الحقيقية بتاعتنا
-    fake_sar = torch.randn(2, 2, 256, 256)       # batch=2, channels=2
-    fake_optical = torch.randn(2, 12, 256, 256)  # batch=2, channels=12
-
+    fake_sar = torch.randn(1, 2, 256, 256)
+    fake_optical = torch.randn(1, 12, 256, 256)
     output = model(fake_sar, fake_optical)
-    print("Output shape:", output.shape)
-    # المفروض يطبع: torch.Size([2, 3, 256, 256])
+    print("Output shape:", output.shape)  # المفروض: torch.Size([1, 3, 256, 256])
+
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f"Total parameters: {total_params:,}")
