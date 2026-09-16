@@ -13,11 +13,16 @@ class DiceBCELoss(nn.Module):
                  -1 = no-data  -> ignored by both CE and Dice
     """
 
-    def __init__(self, ce_weight=0.5, ignore_index=-1, num_classes=3):
+    def __init__(self, ce_weight=0.5, ignore_index=-1, num_classes=3, class_weights=None):
         super().__init__()
         # CrossEntropyLoss already supports ignore_index for the no-data pixels,
         # so we use it as the "BCE-like" term for the multi-class setting.
-        self.ce = nn.CrossEntropyLoss(ignore_index=ignore_index)
+        if class_weights is not None:
+            class_weights = torch.as_tensor(class_weights, dtype=torch.float32)
+            if class_weights.numel() != num_classes:
+                raise ValueError("class_weights must contain one weight per class.")
+        self.register_buffer("class_weights", class_weights)
+        self.ce = nn.CrossEntropyLoss(ignore_index=ignore_index, weight=self.class_weights)
         self.ce_weight = ce_weight
         self.ignore_index = ignore_index
         self.num_classes = num_classes
