@@ -54,8 +54,8 @@ def validate_batch(batch):
     )
     if sar.ndim != 4 or sar.shape[1:] != (2, 256, 256):
         raise ValueError(f"Expected SAR (B, 2, 256, 256), got {tuple(sar.shape)}")
-    if optical.ndim != 4 or optical.shape[1:] != (12, 256, 256):
-        raise ValueError(f"Expected optical (B, 12, 256, 256), got {tuple(optical.shape)}")
+    if optical.ndim != 4 or optical.shape[1:] != (3, 256, 256):
+        raise ValueError(f"Expected optical (B, 3, 256, 256), got {tuple(optical.shape)}")
     if target.ndim != 3 or target.shape[1:] != (256, 256):
         raise ValueError(f"Expected target (B, 256, 256), got {tuple(target.shape)}")
     if not torch.equal(valid_mask, target.ne(-1)):
