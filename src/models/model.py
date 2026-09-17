@@ -14,7 +14,7 @@ class FloodModel(nn.Module):
 
         # ---- فرع الـ Optical (12 channels) ----
         self.optical_backbone = models.resnet50(weights='IMAGENET1K_V2')
-        self.optical_backbone.conv1 = nn.Conv2d(12, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # Keep ResNet-50's native pretrained 3-channel conv1 for S2RGB input.
         self.optical_backbone.fc = nn.Identity()
 
         # نشيل آخر طبقتين (avgpool + fc) من كل backbone عشان نحتفظ بالـ feature map
