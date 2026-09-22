@@ -4,9 +4,10 @@ from torch.utils.data import Dataset
 
 class FloodDataset(Dataset):
     def __init__(self, sar_path, optical_path, mask_path, augment=False):
-        self.sar_data = np.load(sar_path)
-        self.optical_data = np.load(optical_path)
-        self.mask_data = np.load(mask_path)
+        # إضافة mmap_mode='r' عشان نسحب الصور من الهارد مباشرة من غير ما نملى الرامات
+        self.sar_data = np.load(sar_path, mmap_mode='r')
+        self.optical_data = np.load(optical_path, mmap_mode='r')
+        self.mask_data = np.load(mask_path, mmap_mode='r')
         self.augment = augment
 
     def __len__(self):
