@@ -24,6 +24,10 @@ class FloodDataset(Dataset):
         optical = torch.from_numpy(optical)
         mask = torch.from_numpy(mask.astype(np.int64))
 
+        imagenet_mean = torch.tensor([0.485, 0.456, 0.406], dtype=optical.dtype).view(3, 1, 1)
+        imagenet_std = torch.tensor([0.229, 0.224, 0.225], dtype=optical.dtype).view(3, 1, 1)
+        optical = (optical - imagenet_mean) / imagenet_std
+
         if self.augment:
             if torch.rand(1).item() < 0.5:
                 sar = torch.flip(sar, dims=[2])
