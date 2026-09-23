@@ -18,11 +18,11 @@ Evaluated on **3,889 held-out validation images**:
 
 | Optical → Ground Truth → Prediction | Notes |
 | --- | --- |
-| ![demo1](demo_result_1.png) | Detects small, scattered flood patches |
-| ![demo2](demo_result_2.png) | Sharp boundaries on large connected flood zones |
-| ![demo3](demo_result_3.png) | Tracks thin, winding river shapes without breaking continuity |
-| ![demo4](demo_result_4.png) | Precise localization of small isolated flood regions |
-| ![demo5](demo_result_5.png) | Correctly identifies negative (no-flood) cases |
+| ![demo1](assets/demo_1.png) | Detects small, scattered flood patches |
+| ![demo2](assets/demo_2.png) | Sharp boundaries on large connected flood zones |
+| ![demo3](assets/demo_3.png) | Tracks thin, winding river shapes without breaking continuity |
+| ![demo4](assets/demo_4.png) | Precise localization of small isolated flood regions |
+| ![demo5](assets/demo_5.png) | Correctly identifies negative (no-flood) cases |
 
 **Current strengths:** large connected flood bodies (rivers, lakes, wide inundation) with clean, sharp boundaries.
 **Current constraint:** very small, isolated flood pixels are harder to capture consistently — a known challenge for pixel-level segmentation at this class imbalance.
@@ -119,7 +119,7 @@ pip install -r requirements.txt
 
 Download and preprocess the [ImpactMesh-Flood](https://huggingface.co/datasets/ibm-esa-geospatial/ImpactMesh-Flood) dataset into `sar_ready.npy`, `optical_ready.npy`, and `mask_ready.npy`.
 
-### 3. Train
+**3. Train**
 
 ```bash
 python src/train_baseline.py \
